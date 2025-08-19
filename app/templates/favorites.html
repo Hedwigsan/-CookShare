@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}お気に入り - CookShare{% endblock %}
+{% block content %}
+<h1 class="text-lg font-bold mb-3">お気に入り</h1>
+
+{% if recipes|length == 0 %}
+  <p>お気に入りはまだありません。</p>
+{% else %}
+  <ul class="grid gap-3">
+    {% for r in recipes %}
+      <li class="border rounded-2xl p-3 bg-white shadow-sm hover:shadow-md transition">
+        {% if r.main_image %}
+          {% set path = r.main_image %}
+          {% if path.endswith('+') %}{% set path = path[:-1] %}{% endif %}
+          <div class="aspect-video w-full overflow-hidden rounded-xl mb-2 bg-neutral-100">
+            {% if path.endswith('.webp') %}
+              <img src="{{ path }}" class="w-full h-full object-cover" loading="lazy" alt="{{ r.title }}">
+            {% else %}
+              <picture>
+                <source srcset="{{ path }}.webp" type="image/webp">
+                <img src="{{ path }}" class="w-full h-full object-cover" loading="lazy" alt="{{ r.title }}">
+              </picture>
+            {% endif %}
+          </div>
+        {% endif %}
+        <a class="font-semibold tracking-tight leading-6 text-lg" href="/recipes/{{ r.id }}">{{ r.title }}</a>
+        <p class="text-sm text-gray-600 mt-1 line-clamp-2">{{ r.description }}</p>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

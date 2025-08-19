@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="get" class="grid gap-2 mb-3">
+  <div class="flex gap-2">
+    <input class="border flex-1 p-2 rounded" name="q" value="{{ q }}" placeholder="レシピ検索（タイトル/説明）">
+    <button type="submit" class="px-3 py-2 border rounded">検索</button>
+  </div>
+  <div class="flex gap-2">
+    <input class="border flex-1 p-2 rounded" name="tag" value="{{ tag }}" placeholder="タグで絞り込み（例：カレー）">
+    <button type="submit" class="px-3 py-2 border rounded">タグ検索</button>
+  </div>
+</form>
+
+<ul class="grid gap-3">
+  {% for r in recipes %}
+    <li class="relative border rounded p-3 bg-white hover:shadow-md transition">
+      {# 全面にかぶせるストレッチリンク（先頭に置く） #}
+      <a href="/recipes/{{ r.id }}"
+         class="absolute inset-0 z-10"
+         aria-label="{{ r.title }}"></a>
+
+      {% if r.main_image %}
+        {% set path = r.main_image %}
+        {% if path.endswith('+') %}{% set path = path[:-1] %}{% endif %}
+        <div class="aspect-video w-full overflow-hidden rounded mb-2 bg-neutral-100">
+          {% if path.endswith('.webp') %}
+            <img src="{{ path }}" class="w-full h-full object-cover" loading="lazy" alt="{{ r.title }}">
+          {% else %}
+            <picture>
+              <source srcset="{{ path }}.webp" type="image/webp">
+              <img src="{{ path }}" class="w-full h-full object-cover" loading="lazy" alt="{{ r.title }}">
+            </picture>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {# タイトルの <a> は入れ子禁止なので <span> に変更 #}
+      <span class="font-semibold block">{{ r.title }}</span>
+      <p class="text-sm text-gray-600 line-clamp-2">{{ r.description }}</p>
+
+      {# キーボード操作のためにフォーカスリングを擬似表示（任意） #}
+      <span class="pointer-events-none absolute inset-0 rounded ring-0 focus-within:ring-2 ring-black/20"></span>
+    </li>
+  {% endfor %}
+</ul>
+
+{% if recipes|length == 0 %}
+  <p>該当するレシピがありません。</p>
+{% endif %}
+{% endblock %}

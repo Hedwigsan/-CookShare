@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="manifest" href="/manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='global.css') }}?v={{ request.session.get('csrf_token') }}">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>{% block title %}CookShare{% endblock %}</title>
+  <link href="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js"></script>
+  <link rel="icon" href="/static/favicon.ico">
+  <style>
+    .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    /* 64px = ボトムナビ本体の高さ */
+    .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 64px); }
+    html,body{max-width:100%;overflow-x:hidden}
+    *,*::before,*::after{box-sizing:border-box}
+    img,video{max-width:100%;height:auto;display:block}
+    input,textarea,select,button{max-width:100%}
+    input[type="file"]{width:100%}
+</style>
+</head>
+<body class="max-w-screen-sm mx-auto p-4 pt-3 pb-safe bg-neutral-50">
+  <!-- ヘッダー：中央ロゴ／右上はレシピ投稿のみ -->
+  <header class="relative mb-4 h-14 flex items-center">
+    <!-- 中央ロゴ -->
+    <div class="absolute inset-x-0 flex justify-center pointer-events-none">
+      <a href="/" class="inline-flex items-center gap-2">
+        <img src="/static/logo.png" alt="CookShare" class="h-12 w-auto" />
+      </a>
+    </div>
+  </header>
+
+  <!-- メイン -->
+  <main class="pb-24">{% block content %}{% endblock %}</main>
+
+  <!-- フローティング投稿ボタン（FAB） -->
+  {% if request.url.path == '/' %}
+  <div
+    class="fixed left-1/2 -translate-x-1/2 w-full max-w-screen-sm pointer-events-none z-50"
+    style="bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);">
+    <a href="/recipes/new"
+       class="pointer-events-auto float-right rounded-full shadow-lg border bg-black text-white
+              w-14 h-14 flex items-center justify-center text-2xl leading-none hover:opacity-90"
+       aria-label="レシピ投稿">
+      +
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- 固定ボトムナビ -->
+  {% set path = request.url.path %}
+<nav
+  class="fixed left-1/2 -translate-x-1/2 w-full max-w-screen-sm bg-white border-t shadow-[0_-4px_12px_rgba(0,0,0,0.04)]"
+  style="bottom: calc(env(safe-area-inset-bottom, 0px));">
+  <ul class="grid grid-cols-3 text-xs text-gray-600">
+    <!-- ホーム -->
+    <li>
+      <a href="/" class="flex flex-col items-center justify-center h-16 {% if path == '/' %}text-black{% endif %}">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5Z"/>
+        </svg>
+        ホーム
+      </a>
+    </li>
+
+    <!-- お気に入り -->
+    <li>
+      <a href="/favorites" class="flex flex-col items-center justify-center h-16 {% if path.startswith('/favorites') %}text-black{% endif %}">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 4h12a1 1 0 0 1 1 1v16l-7-4-7 4V5a1 1 0 0 1 1-1Z"/>
+        </svg>
+        お気に入り
+      </a>
+    </li>
+
+    <!-- アカウント（画像そのまま表示） -->
+    <li>
+      <a href="/account" class="flex flex-col items-center justify-center h-16 {% if path.startswith('/account') %}text-black{% endif %}">
+        {% if current_user %}
+          <img src="/static/avatar.png" alt="avatar" class="mb-1 h-7 w-7 object-contain">
+          アカウント
+        {% else %}
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16 15a4 4 0 1 0-8 0v2a3 3 0 0 0 3 3h2a3 3 0 0 0 3-3v-2Zm-4-4a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/>
+          </svg>
+          アカウント
+        {% endif %}
+      </a>
+    </li>
+  </ul>
+</nav>
+</body>
+</html>
+
+<script>
+/* IndexedDB: pending POST を保存 */
+const DB_NAME = 'cookshare-queue';
+const STORE = 'posts';
+
+function idb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function queuePost(url, formDataObj) {
+  const db = await idb();
+  const tx = db.transaction(STORE, 'readwrite');
+  tx.objectStore(STORE).add({ url, formDataObj, ts: Date.now() });
+  await tx.complete;
+  db.close();
+}
+async function flushQueue() {
+  const db = await idb();
+  const tx = db.transaction(STORE, 'readwrite');
+  const store = tx.objectStore(STORE);
+  const getAllReq = store.getAll();
+  const items = await new Promise((res, rej)=>{ getAllReq.onsuccess=()=>res(getAllReq.result); getAllReq.onerror=()=>rej(getAllReq.error); });
+  for (const it of items) {
+    try {
+      const fd = new FormData();
+      for (const [k,v] of Object.entries(it.formDataObj)) fd.append(k, v);
+      const r = await fetch(it.url, { method: 'POST', body: fd, credentials: 'same-origin' });
+      if (r.ok) store.delete(it.id); // 成功したら削除
+    } catch {}
+  }
+  await tx.complete;
+  db.close();
+}
+window.addEventListener('online', flushQueue);
+document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) flushQueue(); });
+</script>
+
+<script>
+// .js-post を付けたフォームをFetch送信＆オフライン時は保存
+document.addEventListener('submit', async (e) => {
+  const f = e.target.closest('form.js-post');
+  if (!f) return;
+  e.preventDefault();
+
+  const data = new FormData(f);
+  const url = f.action;
+
+  if (navigator.onLine) {
+    try {
+      const res = await fetch(url, { method: 'POST', body: data, credentials: 'same-origin' });
+      if (!res.ok) throw new Error();
+      // 成功時のUI更新は各フォームのdata-callbackでハンドリングしてもOK
+    } catch {
+      // オンラインでも失敗ならローカルに積む
+      const obj = Object.fromEntries(data.entries());
+      await queuePost(url, obj);
+      alert('一時的に保存しました。オンライン復帰後に送信します。');
+    }
+  } else {
+    // 完全オフライン → Local queue
+    const obj = Object.fromEntries(data.entries());
+    await queuePost(url, obj);
+    // 楽観的UI更新（例：ハート数+1など）はここで
+  }
+});
+</script>

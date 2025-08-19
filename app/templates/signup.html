@@ -1,0 +1,14 @@
+{# app/templates/signup.html #}
+{% extends "base.html" %}
+{% block title %}サインアップ - CookShare{% endblock %}
+{% block content %}
+<h1 class="text-lg font-bold mb-3">サインアップ</h1>
+<form method="post" class="grid gap-3 max-w-sm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input class="border p-2 rounded" type="email" name="email" placeholder="メールアドレス" required>
+  <input class="border p-2 rounded" type="password" name="password" placeholder="パスワード" required>
+  {% if error %}<p class="text-red-600 text-sm">{{ error }}</p>{% endif %}
+  <button class="px-3 py-2 rounded bg-black text-white hover:opacity-90">作成</button>
+</form>
+<p class="mt-3 text-sm">既にアカウントがある？ <a class="underline" href="/login">ログイン</a></p>
+{% endblock %}

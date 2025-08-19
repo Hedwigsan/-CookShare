@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}{{ recipe.title }} - CookShare{% endblock %}
+{% block content %}
+
+  {% if recipe.main_image %}
+    {# 画像パスをクリーンアップ（末尾の + を落とす） #}
+    {% set path = recipe.main_image %}
+    {% if path.endswith('+') %}
+      {% set path = path[:-1] %}
+    {% endif %}
+
+    <div class="aspect-video w-full overflow-hidden rounded mb-3">
+      {% if path.endswith('.webp') %}
+        <img src="{{ path }}" class="w-full h-full object-cover" alt="{{ recipe.title }}">
+      {% else %}
+        <picture>
+          <source srcset="{{ path }}.webp" type="image/webp">
+          <img src="{{ path }}" class="w-full h-full object-cover" alt="{{ recipe.title }}">
+        </picture>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="flex items-center justify-between">
+  <h1 class="text-2xl font-bold tracking-tight mb-2">{{ recipe.title }}</h1>
+
+  <div class="flex items-center gap-2">
+    {# --- お気に入り --- #}
+    {% if current_user %}
+      <form method="post" action="/recipes/{{ recipe.id }}/{% if is_fav %}unfavorite{% else %}favorite{% endif %}">
+        <input type="hidden" name="csrf_token" value="{{ request.session.get('csrf_token') }}">
+        <button class="flex items-center gap-1 px-2 py-1 rounded border hover:bg-gray-50"
+                aria-label="{% if is_fav %}お気に入りを外す{% else %}お気に入りに追加{% endif %}">
+          {% if is_fav %}
+            <!-- filled heart -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-500"
+     viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 21s-6-4.35-9-8.28C-0.5 7.5 2.5 3 6.75 3A5.75 5.75 0 0 1 12 7.25 5.75 5.75 0 0 1 17.25 3C21.5 3 24.5 7.5 21 12.72 18 16.65 12 21 12 21z"/>
+            </svg>
+          {% else %}
+            <!-- outline heart -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-gray-500"
+     viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 21s-6-4.35-9-8.28C-0.5 7.5 2.5 3 6.75 3A5.75 5.75 0 0 1 12 7.25 5.75 5.75 0 0 1 17.25 3C21.5 3 24.5 7.5 21 12.72 18 16.65 12 21 12 21z"/>
+            </svg>
+          {% endif %}
+          <span class="text-sm">{{ fav_count }}</span>
+        </button>
+      </form>
+    {% else %}
+      <div class="flex items-center gap-1 px-2 py-1 text-gray-600">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M21 8.25c0 3.5-4.5 7.25-9 10-4.5-2.75-9-6.5-9-10a4.75 4.75 0 0 1 8-3.4A4.75 4.75 0 0 1 21 8.25z"/>
+        </svg>
+        <span class="text-sm">{{ fav_count }}</span>
+      </div>
+    {% endif %}
+
+    {# --- 作者向け: 編集/削除をアイコンに --- #}
+    {% if current_user and current_user.id == recipe.author_id %}
+      <!-- 編集（ペン） -->
+      <a href="/recipes/{{ recipe.id }}/edit"
+         class="p-1 rounded border hover:bg-gray-50" aria-label="編集">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M16.862 3.487a2.25 2.25 0 013.182 3.182L7.5 19.313l-4.5 1.5 1.5-4.5 12.362-12.826z"/>
+        </svg>
+      </a>
+
+      <!-- 削除（ゴミ箱） -->
+      <form method="post" action="/recipes/{{ recipe.id }}/delete"
+            onsubmit="return confirm('本当に削除しますか？この操作は元に戻せません。');">
+        <input type="hidden" name="csrf_token" value="{{ request.session.get('csrf_token') }}">
+        <button class="p-1 rounded border text-red-600 hover:bg-red-50" aria-label="削除">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+               viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v12a2 2 0 01-2 2H8a2 2 0 01-2-2V7h12z"/>
+          </svg>
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+  
+    
+  {% if tags and tags|length > 0 %}
+    <div class="mb-3 flex flex-wrap gap-2">
+      {% for t in tags %}
+        <a href="/?tag={{ t.name }}" class="px-2 py-1 text-sm border rounded hover:bg-gray-50">#{{ t.name }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if recipe.description %}
+    <p class="whitespace-pre-wrap mb-4">{{ recipe.description }}</p>
+  {% endif %}
+
+  {% if ingredients and ingredients|length > 0 %}
+
+    <h2 class="text-xl font-bold mb-2">材料</h2>
+    <div class="divide-y divide-gray-300 border-t border-b text-lg mb-8">
+      {% for ing in ingredients %}
+        <div class="flex justify-between py-1">
+          <span>{{ ing.name }}</span>
+          <span>{{ ing.amount or '' }} {{ ing.unit or '' }}</span>
+        </div>
+      {% endfor %}
+    </div>
+    <script>
+      function parseAmount(txt){if(!txt)return null;txt=txt.trim();const f=txt.match(/^(\d+)\s*\/\s*(\d+)$/);if(f){const a=parseFloat(f[1]),b=parseFloat(f[2]);if(b!==0)return a/b}const n=txt.match(/^[-+]?\d+(\.\d+)?$/);return n?parseFloat(txt):null}
+      function formatAmount(x){if(x===null)return "";const v=Math.round(x*100)/100;return v%1===0?String(v):String(v)}
+      function rerenderIngredients(){const s=Math.max(1,parseInt(document.getElementById('servings').value||"1"));document.querySelectorAll('#ing-view li').forEach(li=>{const amount=li.dataset.amount||"";const unit=li.dataset.unit||"";const base=parseAmount(amount);const elAmt=li.querySelector('.ing-amount');const elUnit=li.querySelector('.ing-unit');if(!elAmt)return;if(base===null){elAmt.textContent=amount;elUnit.textContent=unit}else{elAmt.textContent=formatAmount(base*s);elUnit.textContent=unit}})}
+      document.getElementById('servings').addEventListener('input', rerenderIngredients);
+      rerenderIngredients();
+    </script>
+  {% endif %}
+
+ {% if steps and steps|length > 0 %}
+  <h2 class="text-xl font-bold mt-6 mb-2">作り方</h2>
+  <ol class="steps">
+    {% for st in steps %}
+      <li>
+        {% if st.body %}
+          <div class="whitespace-pre-wrap text-lg">{{ st.body }}</div>
+        {% endif %}
+        {% if st.image_path %}
+          <div class="mt-2">
+            <img src="{{ st.image_path }}"
+                 alt="手順画像 {{ loop.index }}"
+                 loading="lazy"
+                 class="rounded border max-w-full">
+          </div>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+{% endif %}
+
+{% endblock %}
+

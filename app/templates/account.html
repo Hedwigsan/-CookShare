@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}アカウント - CookShare{% endblock %}
+{% block content %}
+<div class="bg-white border rounded-2xl shadow-sm p-4">
+  <h1 class="text-lg font-bold mb-3">アカウント</h1>
+
+  {% if current_user %}
+    <div class="flex items-center gap-3 mb-4">
+      <span class="h-12 w-12">
+        <img src="/static/avatar.png" alt="avatar" class="h-full w-full object-cover">
+      </span>
+      <div>
+        <div class="font-medium">{{ current_user.email }}</div>
+        <div class="text-xs text-gray-500">ログイン中</div>
+      </div>
+    </div>
+
+    <form method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="px-3 py-2 rounded border hover:bg-gray-50">ログアウト</button>
+    </form>
+  {% else %}
+    <p class="mb-4">ログインしていません。</p>
+    <div class="flex gap-2">
+      <a href="/login" class="px-3 py-2 rounded border hover:bg-gray-50">ログイン</a>
+      <a href="/signup" class="px-3 py-2 rounded border hover:bg-gray-50">サインアップ</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

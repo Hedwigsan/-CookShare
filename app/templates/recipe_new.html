@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-lg font-bold mb-3">レシピ投稿</h1>
+
+<form method="post" action="/recipes" enctype="multipart/form-data" class="grid gap-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <section class="grid gap-2">
+    <input class="border p-2 rounded" name="title" placeholder="タイトル（必須）" required>
+    <textarea class="border p-2 rounded" name="description" rows="5" placeholder="説明・コツなど"></textarea>
+    <div>
+  <label class="block mb-1 text-sm text-gray-600">メイン画像（16:9で切り抜き）</label>
+  <input id="image-input" type="file" name="image" accept="image/*">
+  <!-- プレビュー＆切り抜き用キャンバス -->
+  <div id="cropper-wrap" class="mt-2 hidden">
+    <div class="aspect-video w-full max-h-[60vh] overflow-hidden border rounded">
+      <img id="cropper-img" alt="preview">
+    </div>
+    <div class="mt-2 flex gap-2">
+      <button type="button" class="px-3 py-2 border rounded" id="btn-crop-reset">リセット</button>
+      <span class="text-sm text-gray-600">ドラッグで範囲調整できます（固定比 16:9）</span>
+    </div>
+  </div>
+
+  <!-- サーバに送る切り抜き座標（Cropper.jsの getData(true) をそのまま） -->
+  <input type="hidden" name="crop_x"  id="crop_x">
+  <input type="hidden" name="crop_y"  id="crop_y">
+  <input type="hidden" name="crop_w"  id="crop_w">
+  <input type="hidden" name="crop_h"  id="crop_h">
+</div>
+
+<script>
+  let cropper = null;
+  const elInput = document.getElementById('image-input');
+  const elWrap  = document.getElementById('cropper-wrap');
+  const elImg   = document.getElementById('cropper-img');
+  const elRX = document.getElementById('crop_x');
+  const elRY = document.getElementById('crop_y');
+  const elRW = document.getElementById('crop_w');
+  const elRH = document.getElementById('crop_h');
+
+  elInput.addEventListener('change', () => {
+    const file = elInput.files && elInput.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    elImg.src = url;
+    elWrap.classList.remove('hidden');
+
+    // 既存Cropper破棄
+    if (cropper) cropper.destroy();
+
+    // 16:9固定で初期化
+    cropper = new Cropper(elImg, {
+      aspectRatio: 16 / 9,
+      viewMode: 1,           // 画像の外を選べない
+      autoCropArea: 1,       // できるだけ広く初期選択
+      responsive: true,
+      movable: true,
+      zoomable: true,
+      scalable: false,
+      rotatable: false,
+      crop() {
+        const d = cropper.getData(true); // 画像ピクセル基準
+        elRX.value = Math.max(0, Math.floor(d.x));
+        elRY.value = Math.max(0, Math.floor(d.y));
+        elRW.value = Math.max(1, Math.floor(d.width));
+        elRH.value = Math.max(1, Math.floor(d.height));
+      },
+    });
+
+    document.getElementById('btn-crop-reset').onclick = () => {
+      cropper.reset();
+    };
+  });
+
+  // 念のため送信直前にも最新座標を反映
+  const form = elInput.closest('form');
+  form.addEventListener('submit', (e) => {
+    if (cropper) {
+      const d = cropper.getData(true);
+      elRX.value = Math.max(0, Math.floor(d.x));
+      elRY.value = Math.max(0, Math.floor(d.y));
+      elRW.value = Math.max(1, Math.floor(d.width));
+      elRH.value = Math.max(1, Math.floor(d.height));
+    }
+  });
+</script>
+    <div>
+      <label class="block mb-1 text-sm text-gray-600">タグ（カンマ区切りで複数可。例：カレー, 簡単, 10分）</label>
+      <input class="border p-2 rounded w-full" name="tags_csv" placeholder="例：カレー, 簡単, 10分">
+    </div>
+  </section>
+
+  <section class="grid gap-2">
+    <h2 class="font-semibold">材料</h2>
+    <div id="ing-list" class="grid gap-2"></div>
+    <div class="flex gap-2">
+      <button type="button" class="px-3 py-2 border rounded" onclick="addIng()">＋ 材料を追加</button>
+    </div>
+    <template id="ing-tpl">
+      <div class="ing-item grid grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)_auto] gap-2 items-center w-full">
+          <input class="border p-2 rounded w-full min-w-0" name="ingredients_name" placeholder="例：玉ねぎ" value="{{ ing.name if ing else '' }}">
+          <input class="border p-2 rounded w-full min-w-0" name="ingredients_amount" placeholder="例：1" value="{{ ing.amount if ing else '' }}">
+          <button type="button"
+          class="btn-icon btn-icon--danger shrink-0"
+          aria-label="この材料を削除"
+          onclick="this.closest('.ing-item').remove()">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18"/>
+    </svg>
+  </button>
+</div>
+    </template>
+  </section>
+
+  <section class="grid gap-2">
+  <h2 class="font-semibold">手順</h2>
+
+  <div id="step-list" class="grid gap-3"></div>
+
+  <div class="flex gap-2">
+    <button type="button" class="px-3 py-2 border rounded" onclick="addStep()">＋ 手順を追加</button>
+  </div>
+
+  <!-- 手順1行テンプレート -->
+  <template id="step-tpl">
+  <div class="grid gap-2 p-2 border rounded step-item">
+    <div class="flex gap-2 items-start">
+      <textarea class="border p-2 rounded flex-1 min-w-0"
+                name="steps_body" rows="2"
+                placeholder="例：玉ねぎを薄切りにする"></textarea>
+      <button type="button"
+              class="btn-icon btn-icon--danger shrink-0"
+              aria-label="この手順を削除"
+              onclick="this.closest('.step-item').remove()">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5"
+             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+
+      <!-- 画像（任意） -->
+      <div class="grid gap-2">
+        <label class="text-sm text-gray-600">手順画像（任意）</label>
+        <div class="flex flex-wrap items-center gap-2">
+          <input type="file" name="steps_image" accept="image/*" class="border rounded p-1" onchange="onStepImageChange(this)">
+          <input type="hidden" name="steps_crop_x">
+          <input type="hidden" name="steps_crop_y">
+          <input type="hidden" name="steps_crop_w">
+          <input type="hidden" name="steps_crop_h">
+          <!-- プレビュー -->
+          <div class="step-preview hidden">
+            <img alt="preview" class="h-24 w-24 object-cover rounded border">
+          </div>
+          <!-- 画像を外す（inputの値クリア & プレビュー非表示） -->
+          <button type="button" class="px-2 py-1 border rounded text-sm"
+                  onclick="clearStepImage(this)">画像を外す</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</section>
+
+<script>
+  function previewStepImage(input) {
+    const row  = input.closest('.step-item');
+    const wrap = row.querySelector('.step-preview');
+    const img  = wrap.querySelector('img');
+    const file = input.files && input.files[0];
+
+    if (!file) {
+      wrap.classList.add('hidden');
+      if (img) img.removeAttribute('src');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    img.src = url;
+    wrap.classList.remove('hidden');
+
+    // 削除チェックがあれば外す
+    const del = row.querySelector('input[name="steps_remove_image"]');
+    if (del) del.checked = false;
+
+    // 切り抜き座標を使ってる場合は一旦リセット（ここでCropper起動するなら開始処理を書く）
+    const cx = row.querySelector('input[name="steps_crop_x"]');
+    const cy = row.querySelector('input[name="steps_crop_y"]');
+    const cw = row.querySelector('input[name="steps_crop_w"]');
+    const ch = row.querySelector('input[name="steps_crop_h"]');
+    [cx,cy,cw,ch].forEach(el => { if (el) el.value = ""; });
+  }
+
+  // 「画像を外す」
+  function clearStepImage(btn) {
+    const row   = btn.closest('.step-item');
+    const input = row.querySelector('input[type="file"][name="steps_image"]');
+    const wrap  = row.querySelector('.step-preview');
+    const img   = wrap ? wrap.querySelector('img') : null;
+
+    if (input) input.value = "";          // 新規選択をクリア
+    if (img) { img.removeAttribute('src'); }
+    if (wrap) wrap.classList.add('hidden');
+
+    // 削除チェックがあればオン（「既存画像を消す」意図がある場合）
+    const del = row.querySelector('input[name="steps_remove_image"]');
+    if (del) del.checked = true;
+
+    // 切り抜き座標もクリア
+    const cx = row.querySelector('input[name="steps_crop_x"]');
+    const cy = row.querySelector('input[name="steps_crop_y"]');
+    const cw = row.querySelector('input[name="steps_crop_w"]');
+    const ch = row.querySelector('input[name="steps_crop_h"]');
+    [cx,cy,cw,ch].forEach(el => { if (el) el.value = ""; });
+  }
+
+  // 既存画像の削除チェックでプレビュー薄く
+  function toggleExistingPreview(chk) {
+    const row  = chk.closest('.step-item');
+    const wrap = row.querySelector('.step-preview');
+    if (wrap) wrap.style.opacity = chk.checked ? 0.4 : 1;
+  }
+</script>
+
+  <button type="submit" class="px-3 py-2 border rounded">投稿する</button>
+</form>
+
+<script>
+  function addIng() {
+    const tpl = document.getElementById('ing-tpl').content.cloneNode(true);
+    document.getElementById('ing-list').appendChild(tpl);
+  }
+  function addStep() {
+    const tpl = document.getElementById('step-tpl').content.cloneNode(true);
+    document.getElementById('step-list').appendChild(tpl);
+  }
+  addIng(); addStep();
+</script>
+{% endblock %}
