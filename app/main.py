@@ -35,6 +35,7 @@ class Recipe(SQLModel, table=True):
     description: str = ""
     main_image: Optional[str] = None
     author_id: Optional[int] = Field(foreign_key="user.id", default=None)
+    view_count: int = Field(default=0)
 
 class Ingredient(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -80,12 +81,14 @@ def on_startup():
     _migrate_sqlite()
 
 def _migrate_sqlite():
-    # 既存 recipe テーブルに author_id が無ければ追加
+    # 既存 recipe テーブルに必要なカラムを追加
     with engine.connect() as conn:
         rows = conn.exec_driver_sql("PRAGMA table_info(recipe);").fetchall()
         colnames = {r[1] for r in rows}
         if "author_id" not in colnames:
             conn.exec_driver_sql("ALTER TABLE recipe ADD COLUMN author_id INTEGER;")
+        if "view_count" not in colnames:
+            conn.exec_driver_sql("ALTER TABLE recipe ADD COLUMN view_count INTEGER DEFAULT 0;")
 
 # ---------- Auth helpers ----------
 def get_current_user(request: Request) -> Optional[User]:
@@ -177,7 +180,7 @@ def _to_int_or_none(v) -> Optional[int]:
 # ---------- Routes ----------
 # 一覧＋検索＋タグ絞り込み
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, q: Optional[str] = None, tag: Optional[str] = None):
+def index(request: Request, q: Optional[str] = None, tag: Optional[str] = None, order: str = "new"):
     _ensure_csrf(request)
     current_user = get_current_user(request)
     with Session(engine) as s:
@@ -188,17 +191,24 @@ def index(request: Request, q: Optional[str] = None, tag: Optional[str] = None):
             t = s.exec(select(Tag).where(Tag.name == tag.strip())).first()
             if not t:
                 return templates.TemplateResponse("index.html",
-                    {"request": request, "recipes": [], "q": q or "", "tag": tag, "current_user": current_user})
+                    {"request": request, "recipes": [], "q": q or "", "tag": tag, "order": order, "current_user": current_user})
             rid_rows = s.exec(select(RecipeTag.recipe_id).where(RecipeTag.tag_id == t.id)).all()
             rid_list = [r for (r,) in rid_rows] if rid_rows and isinstance(rid_rows[0], tuple) else rid_rows
             if rid_list:
                 stmt = stmt.where(Recipe.id.in_(rid_list))
             else:
                 return templates.TemplateResponse("index.html",
-                    {"request": request, "recipes": [], "q": q or "", "tag": tag, "current_user": current_user})
-        recipes = s.exec(stmt.order_by(Recipe.id.desc())).all()
+                    {"request": request, "recipes": [], "q": q or "", "tag": tag, "order": order, "current_user": current_user})
+
+        if order == "old":
+            stmt = stmt.order_by(Recipe.id.asc())
+        elif order == "views":
+            stmt = stmt.order_by(Recipe.view_count.desc())
+        else:
+            stmt = stmt.order_by(Recipe.id.desc())
+        recipes = s.exec(stmt).all()
     return templates.TemplateResponse("index.html",
-        {"request": request, "recipes": recipes, "q": q or "", "tag": tag or "", "current_user": current_user})
+        {"request": request, "recipes": recipes, "q": q or "", "tag": tag or "", "order": order, "current_user": current_user})
 
 # ---------- Auth: signup/login/logout ----------
 @app.get("/signup", response_class=HTMLResponse)
@@ -281,10 +291,10 @@ async def recipe_create(
     steps_crop_h: Optional[List[str]] = Form(None),
 
     tags_csv: str = Form(""),
-    crop_x: float = Form(None),
-    crop_y: float = Form(None),
-    crop_w: float = Form(None),
-    crop_h: float = Form(None),
+    crop_x: Optional[str] = Form(None),
+    crop_y: Optional[str] = Form(None),
+    crop_w: Optional[str] = Form(None),
+    crop_h: Optional[str] = Form(None),
     csrf_token: str = Form(...),
 ):
     current_user = get_current_user(request)
@@ -292,9 +302,14 @@ async def recipe_create(
         return RedirectResponse(url="/login", status_code=303)
     verify_csrf(request, csrf_token)
 
+    cx = _to_float_or_none(crop_x)
+    cy = _to_float_or_none(crop_y)
+    cw = _to_float_or_none(crop_w)
+    ch = _to_float_or_none(crop_h)
+
     # メイン画像（16:9切り抜き対応）
     saved_path = None
-    if image and image.filename:
+    if image and getattr(image, "filename", None):
         fname = f"{uuid.uuid4().hex}.webp"
         out = Path("app/media") / fname
         data = await image.read()
@@ -304,9 +319,9 @@ async def recipe_create(
                 im = ImageOps.exif_transpose(im0)
                 im.thumbnail((1600, 1600))
                 # 任意の切り抜き
-                if all(v is not None for v in (crop_x, crop_y, crop_w, crop_h)):
-                    x = max(0, int(crop_x)); y = max(0, int(crop_y))
-                    w = max(1, int(crop_w)); h = max(1, int(crop_h))
+                if all(v is not None for v in (cx, cy, cw, ch)):
+                    x = max(0, int(cx)); y = max(0, int(cy))
+                    w = max(1, int(cw)); h = max(1, int(ch))
                     w = min(w, im.width - x); h = min(h, im.height - y)
                     im = im.crop((x, y, x + w, y + h))
                     im = im.resize((1200, 675), Image.LANCZOS)
@@ -387,6 +402,10 @@ def recipe_detail(request: Request, rid: int):
         r = s.get(Recipe, rid)
         if not r:
             return HTMLResponse("Not found", status_code=404)
+        r.view_count = (r.view_count or 0) + 1
+        s.add(r)
+        s.commit()
+        s.refresh(r)
         ings = s.exec(select(Ingredient).where(Ingredient.recipe_id == rid).order_by(Ingredient.order_no)).all()
         steps = s.exec(select(Step).where(Step.recipe_id == rid).order_by(Step.order_no)).all()
         tags = s.exec(select(Tag).join(RecipeTag, RecipeTag.tag_id == Tag.id).where(RecipeTag.recipe_id == rid)).all()
@@ -638,21 +657,29 @@ def unfavorite_recipe(request: Request, rid: int, csrf_token: str = Form(...)):
 
 # お気に入り一覧ページ
 @app.get("/favorites", response_class=HTMLResponse)
-def favorites_page(request: Request):
+def favorites_page(request: Request, order: str = "new"):
     _ensure_csrf(request)
     user = _require_login(request)
     with Session(engine) as s:
-        # ユーザーのお気に入り recipe を新着順（recipe.id desc）で取得
+        # ユーザーのお気に入り recipe を取得し並び替え
         fav_rids = s.exec(select(Favorite.recipe_id).where(Favorite.user_id == user.id)).all()
         if not fav_rids:
             recipes = []
         else:
             rid_list = [r for (r,) in fav_rids] if isinstance(fav_rids[0], tuple) else fav_rids
-            recipes = s.exec(select(Recipe).where(Recipe.id.in_(rid_list)).order_by(Recipe.id.desc())).all()
+            stmt = select(Recipe).where(Recipe.id.in_(rid_list))
+            if order == "old":
+                stmt = stmt.order_by(Recipe.id.asc())
+            elif order == "views":
+                stmt = stmt.order_by(Recipe.view_count.desc())
+            else:
+                stmt = stmt.order_by(Recipe.id.desc())
+            recipes = s.exec(stmt).all()
     return templates.TemplateResponse("favorites.html", {
         "request": request,
         "recipes": recipes,
         "current_user": user,
+        "order": order,
     })
 
 @app.get("/offline", response_class=HTMLResponse)

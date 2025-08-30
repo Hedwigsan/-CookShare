@@ -44,7 +44,7 @@
   <!-- フローティング投稿ボタン（FAB） -->
   {% if request.url.path == '/' %}
   <div
-    class="fixed left-1/2 -translate-x-1/2 w-full max-w-screen-sm pointer-events-none z-50"
+    class="fixed left-1/2 -translate-x-1/2 w-full max-w-screen-sm pointer-events-none z-[60]"
     style="bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);">
     <a href="/recipes/new"
        class="pointer-events-auto float-right rounded-full shadow-lg border bg-black text-white
@@ -56,9 +56,9 @@
   {% endif %}
 
   <!-- 固定ボトムナビ -->
-  {% set path = request.url.path %}
+{% set path = request.url.path %}
 <nav
-  class="fixed left-1/2 -translate-x-1/2 w-full max-w-screen-sm bg-white border-t shadow-[0_-4px_12px_rgba(0,0,0,0.04)]"
+  class="fixed left-1/2 -translate-x-1/2 w-full max-w-screen-sm bg-white border-t shadow-[0_-4px_12px_rgba(0,0,0,0.04)] z-50"
   style="bottom: calc(env(safe-area-inset-bottom, 0px));">
   <ul class="grid grid-cols-3 text-xs text-gray-600">
     <!-- ホーム -->

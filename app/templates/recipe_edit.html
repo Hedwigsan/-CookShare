@@ -24,7 +24,7 @@
 
     <div class="mt-2">
       <label class="block mb-1 text-sm text-gray-600">画像を差し替える（16:9で切り抜き）</label>
-      <input id="image-input" type="file" name="image" accept="image/*" capture="environment">
+      <input id="image-input" type="file" name="image" accept="image/*">
       <div id="cropper-wrap" class="mt-2 hidden">
         <div class="aspect-video w-full max-h-[60vh] overflow-hidden border rounded">
           <img id="cropper-img" alt="preview">
@@ -247,7 +247,7 @@
         <input type="hidden" name="steps_existing_image" value="">
 
         <div class="flex flex-wrap items-center gap-2">
-          <input type="file" name="steps_image" accept="image/*" class="border rounded p-1" onchange="previewStepImageChange(this)">
+          <input type="file" name="steps_image" accept="image/*" class="border rounded p-1" onchange="previewStepImage(this)">
           <input type="hidden" name="steps_crop_x">
           <input type="hidden" name="steps_crop_y">
           <input type="hidden" name="steps_crop_w">
@@ -328,5 +328,17 @@
     const hidden = row.querySelector('input[name="steps_existing_image"]');
     if (hidden) hidden.value = "";     // ★ ここが肝
   }
+
+  function addIng() {
+    const tpl = document.getElementById('ing-tpl').content.cloneNode(true);
+    document.getElementById('ing-list').appendChild(tpl);
+  }
+  function addStep() {
+    const tpl = document.getElementById('step-tpl').content.cloneNode(true);
+    document.getElementById('step-list').appendChild(tpl);
+  }
+  if (!document.querySelector('#ing-list .ing-item')) addIng();
+  if (!document.querySelector('#step-list .step-item')) addStep();
 </script>
 {% endblock %}
+

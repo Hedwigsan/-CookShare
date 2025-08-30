@@ -9,6 +9,14 @@
     <input class="border flex-1 p-2 rounded" name="tag" value="{{ tag }}" placeholder="タグで絞り込み（例：カレー）">
     <button type="submit" class="px-3 py-2 border rounded">タグ検索</button>
   </div>
+  <div class="flex gap-2">
+    <select name="order" class="border p-2 rounded flex-1">
+      <option value="new" {% if order == 'new' %}selected{% endif %}>投稿日時（新しい順）</option>
+      <option value="old" {% if order == 'old' %}selected{% endif %}>投稿日時（古い順）</option>
+      <option value="views" {% if order == 'views' %}selected{% endif %}>閲覧回数</option>
+    </select>
+    <button type="submit" class="px-3 py-2 border rounded">並び替え</button>
+  </div>
 </form>
 
 <ul class="grid gap-3">
